@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "sample": "node scripts/make-sample-db.mjs",
     "desktop": "vite build && COOL_DB=sample/sample.udb COOL_FILES_ROOT=sample/files electron .",
-    "dist:win": "tsc -b && vite build && electron-builder --win nsis --x64"
+    "dist:win": "tsc -b && vite build && electron-builder --win nsis --x64",
+    "release": "sh scripts/release.sh"
   },
   "devDependencies": {
     "@astryxdesign/cli": "^0.7.16",
