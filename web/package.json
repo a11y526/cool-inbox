@@ -1,7 +1,7 @@
 {
   "name": "cool-inbox",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -51,13 +51,16 @@
       "package.json"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "executableName": "CoolInbox"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "CoolInbox-Setup-${version}.${ext}"
+      "artifactName": "CoolInbox-Setup-${version}.${ext}",
+      "include": "build/installer.nsh",
+      "unicode": true
     },
     "toolsets": {
       "nsis": "1.2.1"

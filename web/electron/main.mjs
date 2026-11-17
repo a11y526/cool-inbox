@@ -69,7 +69,11 @@ function setAutostart(on) {
   updateTray();
 }
 function autostartFirstRun() {
-  if (CAN_AUTOSTART && !fs.existsSync(PREF())) setAutostart(true);
+  if (!CAN_AUTOSTART) return;
+  let pref = null;
+  try { pref = fs.readFileSync(PREF(), 'utf8').trim(); } catch { /* 처음 켬 */ }
+  // 처음 켰거나 켜 둔 상태면 매번 다시 등록한다 (업데이트로 실행 파일 위치·이름이 바뀌어도 자동 실행이 이어지게)
+  if (pref !== 'off') setAutostart(true);
 }
 
 // ---------- 창 ----------
