@@ -1,0 +1,75 @@
+{
+  "name": "cool-inbox",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "sample": "node scripts/make-sample-db.mjs",
+    "desktop": "vite build && COOL_DB=sample/sample.udb COOL_FILES_ROOT=sample/files electron .",
+    "dist:win": "tsc -b && vite build && electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "@astryxdesign/cli": "^0.7.16",
+    "@astryxdesign/core": "^0.7.16",
+    "@astryxdesign/theme-neutral": "^0.7.16",
+    "@heroicons/react": "^2.2.0",
+    "@stylexjs/stylex": "^0.19.2",
+    "@types/node": "^24.19.2",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.7",
+    "electron": "^45.3.3",
+    "electron-builder": "^26.18.0",
+    "oxlint": "^1.90.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6",
+    "wait-on": "^9.5.1"
+  },
+  "productName": "쿨메신저 쪽지함",
+  "description": "쿨메신저 젠투 받은 쪽지 확인용 앱",
+  "main": "electron/main.mjs",
+  "build": {
+    "appId": "kr.local.coolinbox",
+    "productName": "쿨메신저 쪽지함",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "server/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "CoolInbox-Setup-${version}.${ext}"
+    },
+    "toolsets": {
+      "nsis": "1.2.1"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "a11y526",
+      "repo": "cool-inbox",
+      "releaseType": "release"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "repository": "github:a11y526/cool-inbox"
+}
