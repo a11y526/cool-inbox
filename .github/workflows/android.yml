@@ -38,6 +38,7 @@ jobs:
       - name: 웹 화면 빌드
         run: |
           npm ci
+          cp server/relay-url.example.mjs server/relay-url.mjs
           npx vite build --mode phone --outDir dist-phone
 
       - name: Capacitor 설정 (중계 서버 주소는 비밀값)
