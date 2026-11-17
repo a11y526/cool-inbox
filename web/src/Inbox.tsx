@@ -16,7 +16,8 @@ import { Token } from '@astryxdesign/core/Token';
 import { Divider } from '@astryxdesign/core/Divider';
 import { useMediaQuery } from '@astryxdesign/core/hooks';
 import { ArrowLeftIcon, ArrowPathIcon, InboxIcon, PaperClipIcon } from '@heroicons/react/24/outline';
-import { fetchBody, fetchMessages, loadSeen, openAttachment, saveSeen, type Message } from './api';
+import { loadSeen, pcSource, saveSeen, type InboxSource, type Message } from './api';
+import type { ReactNode } from 'react';
 import { MessageBody } from './MessageBody';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
@@ -43,7 +44,7 @@ function sizeText(n: number | null): string {
 
 type Load = { state: 'loading' } | { state: 'error'; reason: string } | { state: 'ready'; list: Message[] };
 
-export default function Inbox() {
+export default function Inbox({ source = pcSource, headerEnd, notice, pollMs = 60_000 }: { source?: InboxSource; headerEnd?: ReactNode; notice?: ReactNode; pollMs?: number }) {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [query, setQuery] = useState('');
   const [openKey, setOpenKey] = useState<number | null>(null);
@@ -52,19 +53,21 @@ export default function Inbox() {
 
   const refresh = useCallback(async () => {
     try {
-      const list = await fetchMessages();
+      const list = await source.load();
       setLoad({ state: 'ready', list });
     } catch (e) {
       setLoad({ state: 'error', reason: e instanceof Error ? e.message : 'read-failed' });
     }
-  }, []);
+  }, [source]);
 
   // 처음 한 번 읽고, 그다음엔 1분마다 새 쪽지를 확인한다
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 60_000);
-    return () => clearInterval(t);
-  }, [refresh]);
+    const t = setInterval(refresh, pollMs);
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
+  }, [refresh, pollMs]);
 
   const list = load.state === 'ready' ? load.list : [];
   const isUnread = (m: Message) => m.unread && !seen.has(m.key);
@@ -77,7 +80,16 @@ export default function Inbox() {
 
   const open = list.find(m => m.key === openKey) ?? null;
 
+  // 좁은 화면(휴대폰)에서는 쪽지를 열 때 방문 기록을 하나 쌓는다 → 안드로이드 「뒤로」가 앱을 끄지 않고 목록으로 돌아간다
+  useEffect(() => {
+    const onPop = () => setOpenKey(null);
+    addEventListener('popstate', onPop);
+    return () => removeEventListener('popstate', onPop);
+  }, []);
+  const closeDetail = () => { if (history.state?.coolDetail) history.back(); else setOpenKey(null); };
+
   const choose = (m: Message) => {
+    if (isNarrow && openKey == null) history.pushState({ coolDetail: true }, '');
     setOpenKey(m.key);
     if (isUnread(m)) {
       const next = new Set(seen).add(m.key);
@@ -101,7 +113,9 @@ export default function Inbox() {
             </VStack>
           </StackItem>
           <IconButton label="새로 고침" tooltip="새 쪽지 확인" variant="secondary" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={refresh} />
+          {headerEnd}
         </HStack>
+        {notice}
         <TextInput
           label="쪽지 찾기"
           isLabelHidden
@@ -162,7 +176,7 @@ export default function Inbox() {
       </List>
     );
 
-  const detail = open ? <MessagePane message={open} onBack={isNarrow ? () => setOpenKey(null) : undefined} /> : null;
+  const detail = open ? <MessagePane source={source} message={open} onBack={isNarrow ? closeDetail : undefined} /> : null;
 
   if (isNarrow) {
     return (
@@ -195,18 +209,18 @@ export default function Inbox() {
   );
 }
 
-function MessagePane({ message: m, onBack }: { message: Message; onBack?: () => void }) {
+function MessagePane({ source, message: m, onBack }: { source: InboxSource; message: Message; onBack?: () => void }) {
   const [body, setBody] = useState<{ key: number; html: string } | { key: number; error: true } | null>(null);
   const [fileError, setFileError] = useState('');
 
   useEffect(() => {
     let alive = true;
     setFileError('');
-    fetchBody(m.key)
+    source.body(m.key)
       .then(html => alive && setBody({ key: m.key, html }))
       .catch(() => alive && setBody({ key: m.key, error: true }));
     return () => { alive = false; };
-  }, [m.key]);
+  }, [m.key, source]);
 
   const current = body?.key === m.key ? body : null;
 
@@ -232,8 +246,19 @@ function MessagePane({ message: m, onBack }: { message: Message; onBack?: () => 
                   icon={<Icon icon={PaperClipIcon} size="xsm" />}
                   onClick={async () => {
                     setFileError('');
-                    const ok = await openAttachment(m.key, f.name).catch(() => false);
-                    if (!ok) setFileError(`「${f.name}」 파일을 찾지 못했어요. 쿨메신저에서 아직 받지 않았거나 옮겨졌을 수 있어요.`);
+                    const r = await source.openFile(m.key, f.name).catch(() => 'missing' as const);
+                    if (r === 'requested') {
+                      setFileError(`「${f.name}」 파일을 학교 PC에 요청했어요. 학교 PC가 켜져 있으면 1~2분 안에 받아져요.`);
+                      // 도착할 때까지 10초마다 확인 (최대 5분)
+                      if (source.fileArrived) {
+                        for (let i = 0; i < 30; i++) {
+                          await new Promise(res => setTimeout(res, 10_000));
+                          if (await source.fileArrived(m.key, f.name)) { setFileError(`「${f.name}」 파일을 받았어요. 한 번 더 누르면 열려요.`); break; }
+                        }
+                      }
+                    }
+                    else if (r === 'tooBig') setFileError(`「${f.name}」 파일은 너무 커서(25MB 넘음) 휴대폰으로 보내지 못했어요. 학교 PC에서 열어 주세요.`);
+                    else if (r === 'missing') setFileError(`「${f.name}」 파일을 찾지 못했어요. 쿨메신저에서 아직 받지 않았거나 옮겨졌을 수 있어요.`);
                   }}
                 />
               ))}

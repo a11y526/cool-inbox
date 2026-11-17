@@ -7,7 +7,9 @@ import path from 'node:path';
 import updater from 'electron-updater';
 import { handleApi } from '../server/api.mjs';
 import { attachmentPath } from '../server/cool.mjs';
-import { pcStatus, startLanServer } from '../server/pc.mjs';
+import { createSync } from '../server/sync.mjs';
+import { handlePcApi } from '../server/pc-api.mjs';
+import { RELAY_URL } from '../server/relay-url.mjs';
 
 const { autoUpdater } = updater;
 
@@ -32,16 +34,7 @@ app.on('second-instance', () => showWindow());
 function startServer() {
   return new Promise(resolve => {
     const srv = http.createServer((req, res) => {
-      if (req.url.startsWith('/api/pc/status')) {
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify(pcStatus({ version: app.getVersion(), update })));
-        return;
-      }
-      if (req.url.startsWith('/api/pc/restart') && req.method === 'POST') {
-        res.writeHead(204).end();
-        if (update.state === 'ready') { quitting = true; autoUpdater.quitAndInstall(true, true); }
-        return;
-      }
+      if (req.url.startsWith('/api/pc/')) { pcApi(req, res); return; }
       if (handleApi(req, res)) return;
       let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
       if (p === '/') p = '/index.html';
@@ -130,6 +123,16 @@ ipcMain.handle('open-attachment', async (_e, key, name) => {
   return (await shell.openPath(p)) === '';
 });
 
+// ---------- 휴대폰으로 보내기 ----------
+let sync = null;
+function pcApi(req, res) {
+  return handlePcApi(req, res, {
+    sync,
+    info: () => ({ version: app.getVersion(), update, relay: RELAY_URL }),
+    restart: () => { if (update.state === 'ready') { quitting = true; autoUpdater.quitAndInstall(true, true); } },
+  });
+}
+
 // ---------- 자동 업데이트 (GitHub Releases) ----------
 // 새 버전을 조용히 받아 두고, 프로그램이 다음에 다시 켜질 때(예: 컴퓨터를 다시 켤 때) 설치한다.
 function setupUpdater() {
@@ -148,7 +151,8 @@ function setupUpdater() {
 
 app.whenReady().then(async () => {
   url = DEV_URL || (await startServer());
-  startLanServer(DIST);
+  sync = createSync({ relay: RELAY_URL, stateFile: path.join(app.getPath('userData'), 'phones.json'), log: (...a) => console.log('[sync]', ...a) });
+  sync.start();
   setupUpdater();
   console.log('[cool-inbox] serving', url);
   autostartFirstRun();

@@ -11,12 +11,18 @@
     "sample": "node scripts/make-sample-db.mjs",
     "desktop": "vite build && COOL_DB=sample/sample.udb COOL_FILES_ROOT=sample/files electron .",
     "dist:win": "tsc -b && vite build && electron-builder --win nsis --x64",
-    "release": "sh scripts/release.sh"
+    "release": "sh scripts/release.sh",
+    "build:phone": "vite build --mode phone --outDir dist-phone"
   },
   "devDependencies": {
     "@astryxdesign/cli": "^0.7.16",
     "@astryxdesign/core": "^0.7.16",
     "@astryxdesign/theme-neutral": "^0.7.16",
+    "@capacitor-community/file-opener": "^8.0.1",
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/cli": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/filesystem": "^8.1.5",
     "@heroicons/react": "^2.2.0",
     "@stylexjs/stylex": "^0.19.2",
     "@types/node": "^24.19.2",
@@ -27,10 +33,12 @@
     "concurrently": "^10.0.7",
     "electron": "^45.3.3",
     "electron-builder": "^26.18.0",
+    "jsqr": "^1.4.0",
     "oxlint": "^1.90.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "sharp": "^0.35.5",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
     "wait-on": "^9.5.1"
@@ -48,6 +56,7 @@
       "dist/**",
       "electron/**",
       "server/**",
+      "shared/**",
       "package.json"
     ],
     "win": {

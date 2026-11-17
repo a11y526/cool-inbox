@@ -1,0 +1,18 @@
+{
+  // 쿨메신저 쪽지함 중계 서버 + 휴대폰 웹앱
+  "name": "cool-inbox",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "assets": {
+    // 휴대폰 웹앱 (web/에서 `npm run build:phone`으로 만든다)
+    "directory": "../web/dist-phone",
+    "binding": "ASSETS",
+    "run_worker_first": ["/r/*", "/android"],
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    // 아직 휴대폰이 받아 가지 않은 암호화된 쪽지·첨부만 잠시 머무는 곳
+    { "binding": "DB", "database_name": "cool-inbox-box", "database_id": "3e234f64-dc1a-4da9-a6b9-2535e2583833", "migrations_dir": "migrations" }
+  ]
+}

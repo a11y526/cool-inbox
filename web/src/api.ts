@@ -44,3 +44,19 @@ export function loadSeen(): Set<number> {
 export function saveSeen(seen: Set<number>) {
   try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seen])); } catch { /* 저장 못 해도 화면은 그대로 */ }
 }
+
+/** 받은 쪽지 화면이 쓰는 데이터. PC(개발용)는 /api, 휴대폰은 휴대폰 안 저장소. */
+export type FileResult = 'opened' | 'requested' | 'missing' | 'tooBig';
+export type InboxSource = {
+  /** 새로 받아 오기(휴대폰: 중계 서버에서) 후 목록 */
+  load: () => Promise<Message[]>;
+  body: (key: number) => Promise<string>;
+  openFile: (key: number, name: string) => Promise<FileResult>;
+  /** 요청한 첨부가 도착했는지 (휴대폰만) — 새로 받아 온 뒤 확인 */
+  fileArrived?: (key: number, name: string) => Promise<boolean>;
+};
+export const pcSource: InboxSource = {
+  load: fetchMessages,
+  body: fetchBody,
+  openFile: async (key, name) => ((await openAttachment(key, name).catch(() => false)) ? 'opened' : 'missing'),
+};

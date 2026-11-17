@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 release/
 sample/
+server/relay-url.mjs
+dist-phone/
+capacitor.config.json

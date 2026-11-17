@@ -1,0 +1,78 @@
+# 안드로이드 앱(APK) 만들기 → 릴리스 'android'에 CoolInbox-Android.apk로 올린다.
+# 휴대폰은 중계 서버의 /android 주소로 이 파일을 받는다.
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'web/android/**'
+      - 'web/src/phone/**'
+      - 'web/package.json'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: 웹 화면 빌드
+        run: |
+          npm ci
+          npx vite build --mode phone --outDir dist-phone
+
+      - name: Capacitor 설정 (중계 서버 주소는 비밀값)
+        env:
+          COOL_RELAY: ${{ secrets.COOL_RELAY }}
+        run: |
+          node -e "
+            const relay = process.env.COOL_RELAY;
+            if (!relay) { console.error('COOL_RELAY 비밀값이 없어요'); process.exit(1); }
+            require('fs').writeFileSync('capacitor.config.json', JSON.stringify({
+              appId: 'kr.local.coolinbox.phone', appName: '쪽지함', webDir: 'dist-phone',
+              server: { url: relay, androidScheme: 'https', cleartext: false },
+              android: { allowMixedContent: false }
+            }, null, 2));"
+          npx cap sync android
+
+      - name: APK 빌드·서명
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+          ANDROID_VERSION_NAME: 1.0.${{ github.run_number }}
+        run: |
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.p12"
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.p12"
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/CoolInbox-Android.apk"
+
+      - name: 릴리스에 올리기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view android >/dev/null 2>&1; then
+            gh release create android --prerelease --title "안드로이드 앱" --notes "휴대폰에서 받는 안드로이드 앱(APK). 학교 PC 프로그램의 「안드로이드」 QR로 받으세요."
+          fi
+          gh release upload android "$RUNNER_TEMP/CoolInbox-Android.apk" --clobber

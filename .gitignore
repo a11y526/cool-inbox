@@ -2,3 +2,4 @@
 .claude/
 app/
 node_modules/
+.secrets/

@@ -12,13 +12,16 @@ function coolApi(): Plugin {
       // @ts-expect-error 서버 코드는 JS 모듈
       const { handleApi } = await import('./server/api.mjs')
       // @ts-expect-error 서버 코드는 JS 모듈
-      const { pcStatus, startLanServer } = await import('./server/pc.mjs')
-      // 휴대폰 테스트 페이지는 빌드된 dist를 쓴다 (npm run build 후 확인)
-      startLanServer(path.resolve(import.meta.dirname, 'dist'))
+      const { createSync } = await import('./server/sync.mjs')
+      // @ts-expect-error 서버 코드는 JS 모듈
+      const { handlePcApi } = await import('./server/pc-api.mjs')
+      // @ts-expect-error 서버 코드는 JS 모듈
+      const { RELAY_URL } = await import('./server/relay-url.mjs')
+      const sync = createSync({ relay: RELAY_URL, stateFile: path.resolve(import.meta.dirname, 'sample/phones.json'), log: console.log })
+      sync.start()
       server.middlewares.use((req, res, next) => {
-        if (req.url?.startsWith('/api/pc/status')) {
-          res.setHeader('Content-Type', 'application/json; charset=utf-8')
-          res.end(JSON.stringify(pcStatus({ version: 'dev', update: { state: 'idle', version: null } })))
+        if (req.url?.startsWith('/api/pc/')) {
+          handlePcApi(req, res, { sync, info: () => ({ version: 'dev', update: { state: 'idle', version: null }, relay: RELAY_URL }) })
           return
         }
         if (!handleApi(req, res)) next()
