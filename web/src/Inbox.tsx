@@ -15,7 +15,7 @@ import { TextInput } from '@astryxdesign/core/TextInput';
 import { Token } from '@astryxdesign/core/Token';
 import { Divider } from '@astryxdesign/core/Divider';
 import { useMediaQuery } from '@astryxdesign/core/hooks';
-import { ArrowLeftIcon, ArrowPathIcon, InboxIcon, PaperClipIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ArrowPathIcon, InboxIcon, MagnifyingGlassIcon, PaperClipIcon } from '@heroicons/react/24/outline';
 import { loadSeen, pcSource, saveSeen, type InboxSource, type Message } from './api';
 import type { ReactNode } from 'react';
 import { MessageBody } from './MessageBody';
@@ -212,10 +212,12 @@ export default function Inbox({ source = pcSource, headerEnd, notice, pollMs = 6
 function MessagePane({ source, message: m, onBack }: { source: InboxSource; message: Message; onBack?: () => void }) {
   const [body, setBody] = useState<{ key: number; html: string } | { key: number; error: true } | null>(null);
   const [fileError, setFileError] = useState('');
+  const [driveFile, setDriveFile] = useState(''); // 휴대폰에 없는 첨부: 구글 드라이브(학교 PC 백업)에서 찾기
 
   useEffect(() => {
     let alive = true;
     setFileError('');
+    setDriveFile('');
     source.body(m.key)
       .then(html => alive && setBody({ key: m.key, html }))
       .catch(() => alive && setBody({ key: m.key, error: true }));
@@ -246,14 +248,16 @@ function MessagePane({ source, message: m, onBack }: { source: InboxSource; mess
                   icon={<Icon icon={PaperClipIcon} size="xsm" />}
                   onClick={async () => {
                     setFileError('');
+                    setDriveFile('');
                     const r = await source.openFile(m.key, f.name).catch(() => 'missing' as const);
+                    if (r !== 'opened' && source.fileArrived) setDriveFile(f.name);
                     if (r === 'requested') {
                       setFileError(`「${f.name}」 파일을 학교 PC에 요청했어요. 학교 PC가 켜져 있으면 1~2분 안에 받아져요.`);
                       // 도착할 때까지 10초마다 확인 (최대 5분)
                       if (source.fileArrived) {
                         for (let i = 0; i < 30; i++) {
                           await new Promise(res => setTimeout(res, 10_000));
-                          if (await source.fileArrived(m.key, f.name)) { setFileError(`「${f.name}」 파일을 받았어요. 한 번 더 누르면 열려요.`); break; }
+                          if (await source.fileArrived(m.key, f.name)) { setFileError(`「${f.name}」 파일을 받았어요. 한 번 더 누르면 열려요.`); setDriveFile(''); break; }
                         }
                       }
                     }
@@ -264,6 +268,18 @@ function MessagePane({ source, message: m, onBack }: { source: InboxSource; mess
               ))}
             </HStack>
             {fileError && <HStack gap={1} vAlign="center"><Icon icon="warning" size="sm" color="warning" /><Text type="supporting">{fileError}</Text></HStack>}
+            {driveFile && (
+              <HStack gap={2} vAlign="center" wrap="wrap">
+                <Button
+                  label="구글 드라이브에서 찾기"
+                  variant="secondary"
+                  size="sm"
+                  icon={<Icon icon={MagnifyingGlassIcon} size="sm" />}
+                  onClick={() => window.open(`https://drive.google.com/drive/search?q=${encodeURIComponent(`"${driveFile}"`)}`, '_blank', 'noopener')}
+                />
+                <Text type="supporting">학교 PC를 구글 드라이브에 백업해 두었다면 꺼져 있어도 열 수 있어요.</Text>
+              </HStack>
+            )}
           </VStack>
         )}
       </VStack>
