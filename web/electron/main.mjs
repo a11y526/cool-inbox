@@ -25,7 +25,7 @@ let tray = null;
 let url = '';
 let quitting = false;
 // 자동 업데이트 상태: idle | checking | downloading | ready | latest | error
-const update = { state: 'idle', version: null };
+const update = { state: 'idle', version: null, error: null };
 
 // 이미 켜져 있으면 새로 켜지 말고 그 창을 보여 준다
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -143,7 +143,12 @@ function setupUpdater() {
   autoUpdater.on('update-available', i => { update.state = 'downloading'; update.version = i.version; });
   autoUpdater.on('update-not-available', () => { if (update.state !== 'ready') update.state = 'latest'; });
   autoUpdater.on('update-downloaded', i => { update.state = 'ready'; update.version = i.version; });
-  autoUpdater.on('error', () => { if (update.state !== 'ready') update.state = 'error'; });
+  autoUpdater.on('error', e => {
+    update.error = String(e?.message || e).split('\n')[0].slice(0, 200);
+    if (update.state !== 'ready') update.state = 'error';
+    // 업데이트가 안 될 때 원인을 볼 수 있게 남겨 둔다
+    try { fs.appendFileSync(path.join(app.getPath('userData'), 'update.log'), `${new Date().toISOString()} ${String(e?.stack || e)}\n`); } catch { /* 무시 */ }
+  });
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
   check();
   setInterval(check, 3 * 60 * 60 * 1000); // 3시간마다

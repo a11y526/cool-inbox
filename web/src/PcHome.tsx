@@ -18,7 +18,7 @@ type Phone = { id: string; device: string | null; pairedAt: number; lastSync: nu
 type Status = {
   version: string;
   relay: string;
-  update: { state: 'idle' | 'checking' | 'downloading' | 'ready' | 'latest' | 'error'; version: string | null };
+  update: { state: 'idle' | 'checking' | 'downloading' | 'ready' | 'latest' | 'error'; version: string | null; error?: string | null };
   sync: { dbFound: boolean; lastRun: number | null; lastError: string | null; phones: Phone[]; pending: { id: string; createdAt: number; link: string } | null };
 };
 
@@ -36,7 +36,7 @@ function updateText(u: Status['update'], version: string): string {
     case 'downloading': return `버전 ${version} · 새 버전 ${u.version} 받는 중`;
     case 'ready': return `새 버전 ${u.version}을 받아 두었어요`;
     case 'latest': return `버전 ${version} · 최신 버전`;
-    case 'error': return `버전 ${version} · 업데이트를 확인하지 못했어요`;
+    case 'error': return `버전 ${version} · 업데이트 실패${u.error ? ` (${u.error})` : ''}`;
     default: return `버전 ${version}`;
   }
 }

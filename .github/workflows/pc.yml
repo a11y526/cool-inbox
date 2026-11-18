@@ -1,0 +1,47 @@
+# 학교 PC 프로그램(Windows 설치 파일) 만들기 → 태그 v* 를 올리면 Releases에 올린다.
+# Windows에서 만들어야 제거 프로그램(uninstaller)이 제대로 만들어진다.
+name: PC 설치 파일
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: web
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 설치 파일 만들기
+        env:
+          COOL_RELAY: ${{ secrets.COOL_RELAY }}
+        run: |
+          npm ci
+          printf "export const RELAY_URL = process.env.COOL_RELAY || '%s';\n" "$COOL_RELAY" > server/relay-url.mjs
+          npx tsc -b
+          npx vite build
+          npx electron-builder --win nsis --x64 --publish never
+
+      - name: 릴리스에 올리기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          F=release/CoolInbox-Setup-$V.exe
+          ls -l release
+          gh release create "v$V" "$F" "$F.blockmap" release/latest.yml -R "$GITHUB_REPOSITORY" --title "$V" --notes "버전 $V" \
+            || gh release upload "v$V" "$F" "$F.blockmap" release/latest.yml -R "$GITHUB_REPOSITORY" --clobber

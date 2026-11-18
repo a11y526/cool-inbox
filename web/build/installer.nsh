@@ -7,3 +7,15 @@
   Pop $0
   Sleep 1000
 !macroend
+
+; 예전 버전의 제거 프로그램이 망가져 있어도(0.2.x는 Mac에서 만들어 "integrity check" 오류가 난다) 설치·업데이트를 멈추지 않는다.
+; 새 파일로 그대로 덮어쓰고, 제거 정보도 새 버전 것으로 다시 쓴다.
+!macro customUnInstallCheck
+  ClearErrors
+  ${if} $R0 != 0
+    DetailPrint "예전 버전 제거가 끝나지 않았어요 (코드 $R0). 새 버전으로 덮어씁니다."
+  ${endif}
+!macroend
+!macro customUnInstallCheckCurrentUser
+  ClearErrors
+!macroend
