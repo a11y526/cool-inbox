@@ -1,6 +1,6 @@
 // 쪽지 데이터. PC 앱·개발 서버·(나중에) 휴대폰이 모두 같은 /api를 쓴다.
 
-export type Attachment = { name: string; size: number | null };
+export type Attachment = { name: string; size: number | null; /** 구글 드라이브 파일 ID (학교 PC가 드라이브에 백업 중일 때) */ drive?: string };
 export type Message = {
   key: number;
   title: string;
@@ -46,7 +46,7 @@ export function saveSeen(seen: Set<number>) {
 }
 
 /** 받은 쪽지 화면이 쓰는 데이터. PC(개발용)는 /api, 휴대폰은 휴대폰 안 저장소. */
-export type FileResult = 'opened' | 'requested' | 'missing' | 'tooBig';
+export type FileResult = 'opened' | 'drive' | 'requested' | 'missing' | 'tooBig';
 export type InboxSource = {
   /** 새로 받아 오기(휴대폰: 중계 서버에서) 후 목록 */
   load: () => Promise<Message[]>;

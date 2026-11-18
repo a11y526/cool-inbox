@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createBox, itemName, newPairing, packFile, packJson, pairingLink, relayClient, seal, open, unpack } from '../shared/box.mjs';
 import { attachmentPath, findDb, getBody, listMessages } from './cool.mjs';
+import { driveIndex } from './drive.mjs';
 
 const BATCH = 80; // 쪽지 묶음 크기
 const MAX_FILE = 25 * 1024 * 1024; // 이보다 큰 첨부는 보내지 않는다(중계 서버 한도)
@@ -15,6 +16,7 @@ const PENDING_MS = 30 * 60 * 1000; // QR을 30분 안에 안 찍으면 그 연�
 const BACKFILL_MS = 365 * 24 * 3600 * 1000; // 최근 1년치
 const BACKFILL_PER_RUN = 20 * 1024 * 1024; // 1분에 20MB까지
 const BACKLOG_MAX = 300 * 1024 * 1024; // 휴대폰이 아직 안 받아 간 것이 이만큼 쌓이면 잠시 멈춘다
+const DRIVE_EVERY = 10 * 60 * 1000; // 구글 드라이브 백업 확인 간격
 
 export function createSync({ relay, stateFile, log = () => {} }) {
   let state = { pairings: [] };
@@ -65,6 +67,7 @@ export function createSync({ relay, stateFile, log = () => {} }) {
         } else if (d?.type === 'resync') {
           p.sent = [];
           p.sentFiles = [];
+          p.driveSent = [];
         }
       } catch (e) {
         log('bad up item', e.message);
@@ -128,6 +131,45 @@ export function createSync({ relay, stateFile, log = () => {} }) {
     }
   }
 
+  // 첨부가 구글 드라이브에 백업돼 있으면 그 파일 ID를 휴대폰에 알려 준다(휴대폰에 없는 첨부를 드라이브에서 바로 연다)
+  let driveCheckedAt = 0;
+  async function sendDriveIds(list) {
+    const paired = state.pairings.filter(p => p.pairedAt);
+    if (!paired.length || Date.now() - driveCheckedAt < DRIVE_EVERY) return;
+    driveCheckedAt = Date.now();
+    const todo = new Map(); // "key/name" → [m, f]
+    for (const p of paired) {
+      const done = new Set(p.driveSent ||= []);
+      for (const m of list) for (const f of m.files) if (!done.has(`${m.key}/${f.name}`)) todo.set(`${m.key}/${f.name}`, [m, f]);
+    }
+    if (!todo.size) return;
+    const lookup = driveIndex();
+    if (!lookup) return;
+    const found = new Map();
+    try {
+      for (const [id, [m, f]] of todo) {
+        const fp = attachmentPath(m.key, f.name);
+        const drive = fp && lookup(fp);
+        if (drive) found.set(id, { key: m.key, name: f.name, drive });
+      }
+    } finally { lookup.close(); }
+    if (!found.size) return;
+    for (const p of paired) {
+      const done = new Set(p.driveSent);
+      const out = [...found].filter(([id]) => !done.has(id));
+      if (!out.length) continue;
+      const rc = relayClient(relay, p.id, p.pcToken);
+      try {
+        for (let i = 0; i < out.length; i += 500) {
+          const chunk = out.slice(i, i + 500);
+          await rc.put('down', itemName('d'), await seal(p.key, await packJson({ type: 'drive', list: chunk.map(([, v]) => v) }, true)));
+          for (const [id] of chunk) p.driveSent.push(id);
+          save();
+        }
+      } catch (e) { log('drive ids failed', e.message); }
+    }
+  }
+
   async function runOnce() {
     if (status.running) return;
     status.running = true;
@@ -156,6 +198,7 @@ export function createSync({ relay, stateFile, log = () => {} }) {
         save();
       }
       status.lastError = res.ok ? null : res.error;
+      if (res.ok) await sendDriveIds(res.list).catch(e => log('drive check failed', e.message));
     } catch (e) {
       status.lastError = e.message;
       log('sync error', e.message);

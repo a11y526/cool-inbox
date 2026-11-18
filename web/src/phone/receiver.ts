@@ -50,9 +50,25 @@ export function receiver(p: PairingInfo) {
         for (const m of list) {
           const old = await getMessage(m.key);
           if (!old) added++;
-          merged.push(old ? { ...m, unread: old.unread && m.unread } : m);
+          // 드라이브 ID는 따로 오므로 예전 것을 이어 받는다
+          const files = old ? m.files.map(f => ({ ...f, drive: f.drive ?? old.files.find(o => o.name === f.name)?.drive })) : m.files;
+          merged.push(old ? { ...m, files, unread: old.unread && m.unread } : m);
         }
         await putMessages(merged);
+      } else if (pkg.kind === 'json' && pkg.data?.type === 'drive') {
+        const byKey = new Map<number, { name: string; drive: string }[]>();
+        for (const d of pkg.data.list as { key: number; name: string; drive: string }[]) {
+          if (!/^[\w-]{10,100}$/.test(d.drive)) continue;
+          if (!byKey.has(d.key)) byKey.set(d.key, []);
+          byKey.get(d.key)!.push(d);
+        }
+        const changed: StoredMessage[] = [];
+        for (const [key, ds] of byKey) {
+          const m = await getMessage(key);
+          if (!m) continue;
+          changed.push({ ...m, files: m.files.map(f => ({ ...f, drive: ds.find(d => d.name === f.name)?.drive ?? f.drive })) });
+        }
+        if (changed.length) await putMessages(changed);
       } else if (pkg.kind === 'file') {
         const { key, name, missing, tooBig } = pkg.meta;
         await putFile({ id: fileId(key, name), key, name, blob: missing || tooBig ? null : new Blob([pkg.bytes as BlobPart]), missing, tooBig });
@@ -84,6 +100,12 @@ export function receiver(p: PairingInfo) {
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
         return 'opened';
+      }
+      // 휴대폰에 없으면 구글 드라이브(학교 PC 백업)에서 바로 연다
+      const drive = (await getMessage(key))?.files.find(x => x.name === name)?.drive;
+      if (drive) {
+        window.open(`https://drive.google.com/file/d/${encodeURIComponent(drive)}/view`, '_blank', 'noopener');
+        return 'drive';
       }
       if (f?.tooBig) return 'tooBig';
       if (f?.missing) return 'missing';
