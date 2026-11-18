@@ -12,6 +12,7 @@ export async function handlePcApi(req, res, { sync, info, restart }) {
     if (u.pathname === '/api/pc/restart') { sendJson(res, 200, { ok: true }); restart?.(); return; }
     sendJson(res, 404, { error: 'unknown' });
   } catch (e) {
-    sendJson(res, 500, { error: String(e?.message || e) });
+    const cause = e?.cause ? ` (${e.cause.code || ''} ${e.cause.message || e.cause}`.trimEnd() + ')' : '';
+    sendJson(res, 500, { error: String(e?.message || e) + cause });
   }
 }

@@ -76,7 +76,7 @@ export function PcHome() {
     try { localStorage.setItem('cool-pair-os', which); } catch { /* 무시 */ }
     setBusy(which);
     setPairError('');
-    try { await post('/api/pc/pair'); await load(); } catch { setPairError('중계 서버에 연결하지 못했어요. 이 PC의 인터넷 연결을 확인해 주세요.'); }
+    try { await post('/api/pc/pair'); await load(); } catch (e) { setPairError(`중계 서버에 연결하지 못했어요. 이 PC의 인터넷 연결을 확인해 주세요. (${(e as Error).message})`); }
     setBusy('');
   };
   const unpair = async (id: string, label: string) => {

@@ -1,6 +1,6 @@
 // PC 앱: 이 PC 안에서만 접속되는 작은 서버(127.0.0.1)로 화면과 API를 띄우고, 창 하나로 보여 준다.
 // 컴퓨터를 켜면 알림 영역에 조용히 켜지고, 창을 닫아도 알림 영역에 남는다.
-import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, net, shell } from 'electron';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -156,6 +156,8 @@ function setupUpdater() {
 }
 
 app.whenReady().then(async () => {
+  // 중계 서버 연결은 크롬과 같은 통신 방식으로: Windows의 프록시·인증서 설정(학교 망 보안 장비 등)을 그대로 따른다.
+  globalThis.fetch = (input, init) => net.fetch(input, init);
   url = DEV_URL || (await startServer());
   sync = createSync({ relay: RELAY_URL, stateFile: path.join(app.getPath('userData'), 'phones.json'), log: (...a) => console.log('[sync]', ...a) });
   sync.start();
