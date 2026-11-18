@@ -73,7 +73,7 @@ function autostartFirstRun() {
 function createWindow() {
   win = new BrowserWindow({
     width: 560, height: 760, minWidth: 380, minHeight: 520,
-    title: APP_NAME, autoHideMenuBar: true, show: false,
+    title: APP_NAME, autoHideMenuBar: true, show: false, icon: path.join(import.meta.dirname, 'tray@3x.png'),
     webPreferences: { preload: path.join(import.meta.dirname, 'preload.cjs'), contextIsolation: true, sandbox: true },
   });
   // 쪽지 본문의 링크는 브라우저로
@@ -98,8 +98,9 @@ function showWindow() {
 
 // ---------- 알림 영역 ----------
 async function createTray() {
-  let icon = nativeImage.createEmpty();
-  try { icon = await app.getFileIcon(process.execPath, { size: 'small' }); } catch { /* 기본 아이콘 */ }
+  // 알림 영역 아이콘은 같이 넣은 그림 파일로 (exe에서 꺼내 쓰면 빈 아이콘이 되어 안 보일 수 있다)
+  let icon = nativeImage.createFromPath(path.join(import.meta.dirname, 'tray.png'));
+  if (icon.isEmpty()) icon = await app.getFileIcon(process.execPath, { size: 'small' }).catch(() => nativeImage.createEmpty());
   tray = new Tray(icon);
   tray.setToolTip(APP_NAME);
   tray.on('click', showWindow);
