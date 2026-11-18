@@ -253,7 +253,7 @@ function MessagePane({ source, message: m, onBack }: { source: InboxSource; mess
                     if (r !== 'opened' && r !== 'drive' && source.fileArrived) setDriveFile(f.name);
                     if (r === 'drive') return; // 구글 드라이브에서 열림
                     if (r === 'requested') {
-                      setFileError(`「${f.name}」 파일을 학교 PC에 요청했어요. 학교 PC가 켜져 있으면 1~2분 안에 받아져요.`);
+                      setFileError(`「${f.name}」 파일을 학교 PC에 요청했어요. 학교 PC가 켜져 있으면 1~2분 안에 받아져요. 학교 PC 쿨메신저에서 이 첨부를 아직 내려받지 않았다면, 내려받은 뒤에 와요.`);
                       // 도착할 때까지 10초마다 확인 (최대 5분)
                       if (source.fileArrived) {
                         for (let i = 0; i < 30; i++) {

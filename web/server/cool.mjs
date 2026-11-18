@@ -3,6 +3,7 @@
 // 형식은 NOTES-coolmessenger.md 참고.
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import zlib from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -100,6 +101,42 @@ export function getBody(key) {
   }
 }
 
+/** 쿨메신저 받은 파일 폴더 후보: 쪽지에 적힌 폴더가 실제와 다를 수 있어서(문서 폴더 위치 변경·OneDrive 등) 여러 곳을 본다 */
+function receivedDirs(recorded) {
+  const home = process.env.USERPROFILE || os.homedir();
+  const sub = path.join('CoolMessenger Files', 'Received Files');
+  const dirs = [recorded];
+  for (const docs of [path.join(home, 'Documents'), path.join(home, 'OneDrive', 'Documents'), path.join(home, 'OneDrive', '문서'), path.join(home, '문서')]) dirs.push(path.join(docs, sub));
+  if (process.env.OneDrive) dirs.push(path.join(process.env.OneDrive, 'Documents', sub), path.join(process.env.OneDrive, '문서', sub));
+  return [...new Set(dirs)];
+}
+
+// 폴더 목록은 잠깐(10초) 기억해 둔다: 첨부 여러 개를 한꺼번에 찾을 때 폴더를 매번 다시 읽지 않게
+const dirCache = new Map();
+function listDir(dir) {
+  const c = dirCache.get(dir);
+  if (c && Date.now() - c.at < 10_000) return c.list;
+  let list = [];
+  try { list = fs.readdirSync(dir); } catch { /* 없는 폴더 */ }
+  dirCache.set(dir, { at: Date.now(), list });
+  return list;
+}
+
+/** 이름이 같은 파일, 없으면 쿨메신저가 겹친 이름에 붙이는 "이름 (1).확장자" 중 크기가 같은 것 */
+function findIn(dir, name, size) {
+  const exact = path.join(dir, name);
+  if (fs.existsSync(exact)) return exact;
+  if (size == null) return null;
+  const ext = path.extname(name), base = name.slice(0, name.length - ext.length).normalize('NFC');
+  for (const f of listDir(dir)) {
+    const nf = f.normalize('NFC');
+    if (!nf.startsWith(base + ' (') || !nf.endsWith(ext)) continue;
+    if (!/^ \(\d+\)$/.test(nf.slice(base.length, nf.length - ext.length))) continue;
+    try { if (fs.statSync(path.join(dir, f)).size === size) return path.join(dir, f); } catch { /* */ }
+  }
+  return null;
+}
+
 /** 첨부 파일의 실제 경로. 그 쪽지에 적힌 첨부만, 실제로 있는 파일만. */
 export function attachmentPath(key, name) {
   const db = open();
@@ -108,8 +145,12 @@ export function attachmentPath(key, name) {
     const r = db.prepare('select cast(FilePath as blob) f from tbl_recv where MessageKey = ?').get(Number(key));
     const hit = r && files(r.f).find(x => x.name === name);
     if (!hit) return null;
-    const p = path.join(process.env.COOL_FILES_ROOT ? process.env.COOL_FILES_ROOT : hit.dir.replace(/\\/g, path.sep), hit.name);
-    return fs.existsSync(p) ? p : null;
+    if (process.env.COOL_FILES_ROOT) return findIn(process.env.COOL_FILES_ROOT, hit.name, hit.size);
+    for (const dir of receivedDirs(hit.dir.replace(/\\/g, path.sep))) {
+      const p = findIn(dir, hit.name, hit.size);
+      if (p) return p;
+    }
+    return null;
   } finally {
     db.close();
   }

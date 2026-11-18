@@ -92,8 +92,11 @@ export function createSync({ relay, stateFile, log = () => {} }) {
     const fp = attachmentPath(m.key, f.name);
     let meta = { key: m.key, name: f.name };
     let bytes = new Uint8Array(0);
-    if (!fp) meta.missing = true;
-    else {
+    if (!fp) {
+      meta.missing = true;
+      (p.missingFiles ||= []).includes(id) || p.missingFiles.push(id); // 나중에 학교 PC에 생기면 다시 보낸다
+    } else {
+      p.missingFiles = (p.missingFiles || []).filter(x => x !== id);
       const size = fs.statSync(fp).size;
       if (size > MAX_FILE) meta.tooBig = size;
       else bytes = new Uint8Array(fs.readFileSync(fp));
@@ -112,7 +115,11 @@ export function createSync({ relay, stateFile, log = () => {} }) {
     for (const m of list) {
       for (const f of m.files) {
         const id = `${m.key}/${f.name}`;
-        if (done.has(id)) continue;
+        if (done.has(id)) {
+          // 없다고 알렸던 첨부가 이제 학교 PC에 있으면(쿨메신저에서 내려받으면) 다시 보낸다
+          if (p.missingFiles?.includes(id) && attachmentPath(m.key, f.name)) await sendFile(p, rc, m, f);
+          continue;
+        }
         const fits = f.size == null || f.size <= MAX_FILE;
         if (p.wanted.includes(id) || (m.at && new Date(m.at) >= since && fits)) await sendFile(p, rc, m, f);
         else if (fits && m.at && Date.now() - new Date(m.at) <= BACKFILL_MS) old.push([m, f]);

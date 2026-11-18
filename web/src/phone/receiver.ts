@@ -108,13 +108,14 @@ export function receiver(p: PairingInfo) {
         return 'drive';
       }
       if (f?.tooBig) return 'tooBig';
-      if (f?.missing) return 'missing';
+      // 없다고 들었던 첨부도 다시 요청한다: 그 사이 학교 PC에서 내려받았을 수 있다
       await send({ type: 'file', key, name });
       return 'requested';
     },
     fileArrived: async (key, name) => {
       await sync().catch(() => {});
-      return !!(await getFile(key, name));
+      const f = await getFile(key, name);
+      return !!(f?.blob || f?.tooBig); // "없음" 알림은 도착으로 치지 않는다
     },
   };
 
