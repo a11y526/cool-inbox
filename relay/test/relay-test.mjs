@@ -16,7 +16,7 @@ const big = crypto.randomBytes(2_500_000); // 1MB 조각 3개
 check('PC가 down에 넣기', (await call('PUT', `/r/box/${id}/down/a1`, pc, big)).status === 201);
 check('휴대폰은 down에 못 넣음', (await call('PUT', `/r/box/${id}/down/a2`, phone, 'x')).status === 403);
 check('열쇠 없으면 목록 못 봄', (await call('GET', `/r/box/${id}/down`)).status === 403);
-check('PC는 down 목록 못 봄', (await call('GET', `/r/box/${id}/down`, pc)).status === 403);
+check('PC도 down 목록(크기)은 봄', (await call('GET', `/r/box/${id}/down`, pc)).status === 200);
 const list = await (await call('GET', `/r/box/${id}/down`, phone)).json();
 check('휴대폰이 down 목록 봄', list.items?.length === 1 && list.items[0].size === big.length);
 const got = Buffer.from(await (await call('GET', `/r/box/${id}/down/a1`, phone)).arrayBuffer());

@@ -10,7 +10,7 @@
 //
 // API (모두 /r/ 아래):
 //   POST   /r/box                       { id, pcHash, phoneHash }  우편함 만들기 (PC가 연결할 때)
-//   GET    /r/box/:id/:dir              받을 것 목록  [{ name, size }]
+//   GET    /r/box/:id/:dir              쌓인 것 목록  [{ name, size }] (양쪽 다)
 //   PUT    /r/box/:id/:dir/:name        넣기 (암호화된 바이트)
 //   GET    /r/box/:id/:dir/:name        꺼내기
 //   DELETE /r/box/:id/:dir/:name        지우기
@@ -107,7 +107,7 @@ async function handleApi(req, env, parts) {
   const can = await role(req, meta, dir);
   if (!can) return err(403, 'forbidden');
   if (parts.length === 4 && req.method === 'GET') {
-    if (can !== 'read') return err(403, 'forbidden');
+    // 넣는 쪽도 목록(이름·크기)은 볼 수 있다: 상대가 아직 안 받아 간 양을 알아야 너무 많이 쌓지 않는다
     return json({ items: await listItems(env, id, dir) });
   }
 

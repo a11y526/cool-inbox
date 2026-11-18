@@ -11,6 +11,10 @@ import { attachmentPath, findDb, getBody, listMessages } from './cool.mjs';
 const BATCH = 80; // 쪽지 묶음 크기
 const MAX_FILE = 25 * 1024 * 1024; // 이보다 큰 첨부는 보내지 않는다(중계 서버 한도)
 const PENDING_MS = 30 * 60 * 1000; // QR을 30분 안에 안 찍으면 그 연결은 버린다
+// 연결 전에 온 쪽지의 첨부도 컴퓨터가 꺼져 있을 때 열 수 있게 미리 보낸다(최근 것부터 조금씩)
+const BACKFILL_MS = 365 * 24 * 3600 * 1000; // 최근 1년치
+const BACKFILL_PER_RUN = 20 * 1024 * 1024; // 1분에 20MB까지
+const BACKLOG_MAX = 300 * 1024 * 1024; // 휴대폰이 아직 안 받아 간 것이 이만큼 쌓이면 잠시 멈춘다
 
 export function createSync({ relay, stateFile, log = () => {} }) {
   let state = { pairings: [] };
@@ -95,18 +99,32 @@ export function createSync({ relay, stateFile, log = () => {} }) {
     p.sentFiles.push(id);
     p.wanted = p.wanted.filter(x => x !== id);
     save();
+    return bytes.length;
   }
 
   async function sendFiles(p, rc, list) {
     const done = new Set(p.sentFiles);
-    const since = new Date(p.pairedAt - 24 * 3600 * 1000); // 연결 하루 전부터 온 쪽지의 첨부는 자동으로
+    const since = new Date(p.pairedAt - 24 * 3600 * 1000); // 연결 하루 전부터 온 쪽지의 첨부는 곧바로
+    const old = []; // 그보다 앞선 1년치는 미리 보내기 후보
     for (const m of list) {
       for (const f of m.files) {
         const id = `${m.key}/${f.name}`;
         if (done.has(id)) continue;
-        const auto = m.at && new Date(m.at) >= since && (f.size == null || f.size <= MAX_FILE);
-        if (auto || p.wanted.includes(id)) await sendFile(p, rc, m, f);
+        const fits = f.size == null || f.size <= MAX_FILE;
+        if (p.wanted.includes(id) || (m.at && new Date(m.at) >= since && fits)) await sendFile(p, rc, m, f);
+        else if (fits && m.at && Date.now() - new Date(m.at) <= BACKFILL_MS) old.push([m, f]);
       }
+    }
+    if (!old.length) return;
+    // 휴대폰이 오래 안 열려서 서버에 많이 쌓였으면 기다린다
+    let backlog;
+    try { backlog = (await rc.list('down')).reduce((n, it) => n + (it.size || 0), 0); } catch { return; } // 예전 중계 서버면 건너뛴다
+    let budget = Math.min(BACKFILL_PER_RUN, BACKLOG_MAX - backlog);
+    old.sort((a, b) => new Date(b[0].at) - new Date(a[0].at)); // 최근 것부터
+    for (const [m, f] of old) {
+      if (budget <= 0) break;
+      if (!attachmentPath(m.key, f.name)) continue; // 컴퓨터에 없는 파일은 휴대폰이 요청할 때 알려 준다
+      budget -= await sendFile(p, rc, m, f);
     }
   }
 
