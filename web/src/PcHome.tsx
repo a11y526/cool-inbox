@@ -109,7 +109,7 @@ export function PcHome() {
                 <Banner
                   status="info"
                   title={`새 버전 ${status.update.version}이 준비됐어요`}
-                  description="다음에 컴퓨터를 켤 때 자동으로 설치돼요."
+                  description="창을 닫으면 1분 안에 알아서 설치되고 다시 켜져요."
                   endContent={<Button label="지금 설치" size="sm" variant="secondary" onClick={() => post('/api/pc/restart')} />}
                 />
               )}

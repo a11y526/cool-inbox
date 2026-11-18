@@ -18,6 +18,9 @@ const DEV_URL = process.env.VITE_DEV_URL; // 개발 중엔 Vite 서버를 그대
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
 const APP_NAME = '쿨메신저 쪽지함';
 const STARTED_BY_LOGIN = process.argv.includes('--autostart');
+// 혼자 업데이트하고 다시 켜진 경우에는 창을 띄우지 않는다 (업데이트 직전에 표시를 남긴다)
+const SILENT_MARK = () => path.join(app.getPath('userData'), 'silent-update');
+function takeSilentMark() { try { fs.unlinkSync(SILENT_MARK()); return true; } catch { return false; } }
 const CAN_AUTOSTART = app.isPackaged && process.platform === 'win32';
 
 let win = null;
@@ -143,16 +146,30 @@ function setupUpdater() {
   autoUpdater.on('checking-for-update', () => { if (update.state !== 'ready') update.state = 'checking'; });
   autoUpdater.on('update-available', i => { update.state = 'downloading'; update.version = i.version; });
   autoUpdater.on('update-not-available', () => { if (update.state !== 'ready') update.state = 'latest'; });
-  autoUpdater.on('update-downloaded', i => { update.state = 'ready'; update.version = i.version; });
+  autoUpdater.on('update-downloaded', i => { update.state = 'ready'; update.version = i.version; installWhenIdle(); });
   autoUpdater.on('error', e => {
     update.error = String(e?.message || e).split('\n')[0].slice(0, 200);
     if (update.state !== 'ready') update.state = 'error';
     // 업데이트가 안 될 때 원인을 볼 수 있게 남겨 둔다
     try { fs.appendFileSync(path.join(app.getPath('userData'), 'update.log'), `${new Date().toISOString()} ${String(e?.stack || e)}\n`); } catch { /* 무시 */ }
   });
-  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  const check = () => { if (update.state !== 'ready') autoUpdater.checkForUpdates().catch(() => {}); };
   check();
-  setInterval(check, 3 * 60 * 60 * 1000); // 3시간마다
+  setInterval(check, 30 * 60 * 1000); // 30분마다
+}
+
+// 받아 둔 새 버전은 창이 안 보일 때(알림 영역에만 있을 때) 바로 설치하고 조용히 다시 켠다.
+// 창을 보고 있는 중이면 창을 닫을 때까지 기다린다. 쪽지 보내기는 몇 초만 멈춘다.
+let installTimer = null;
+function installWhenIdle() {
+  clearTimeout(installTimer);
+  installTimer = setTimeout(() => {
+    if (update.state !== 'ready') return;
+    if (win && win.isVisible()) return installWhenIdle(); // 1분 뒤 다시 보기
+    try { fs.writeFileSync(SILENT_MARK(), '1'); } catch { /* 무시 */ }
+    quitting = true;
+    autoUpdater.quitAndInstall(true, true);
+  }, 60 * 1000);
 }
 
 app.whenReady().then(async () => {
@@ -167,7 +184,7 @@ app.whenReady().then(async () => {
   await createTray();
   createWindow();
   // 컴퓨터 켜며 자동으로 켜진 거면 창은 띄우지 않는다
-  if (!STARTED_BY_LOGIN) win.once('ready-to-show', showWindow);
+  if (!STARTED_BY_LOGIN && !takeSilentMark()) win.once('ready-to-show', showWindow);
 });
 app.on('before-quit', () => { quitting = true; });
 // 창을 닫아도 알림 영역에 남아 있으므로, 창이 모두 닫혀도 끝내지 않는다
